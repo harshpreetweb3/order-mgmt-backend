@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const path = require('path');
 const connectDB = require('./config/db');
 const { errorHandler, notFound } = require('./middleware/errorMiddleware');
 
@@ -14,7 +15,7 @@ app.use(cors());
 // Body parser
 app.use(express.json());
 
-// Routes
+// API Routes
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/items', require('./routes/itemRoutes'));
@@ -25,6 +26,19 @@ app.use('/api/dashboard', require('./routes/dashboardRoutes'));
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Order Management API is running smoothly' });
 });
+
+// Serve frontend static assets in production
+if (process.env.NODE_ENV === 'production') {
+  const frontendBuildPath = path.join(__dirname, '../frontend/dist');
+  app.use(express.static(frontendBuildPath));
+
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) {
+      return next();
+    }
+    res.sendFile(path.resolve(frontendBuildPath, 'index.html'));
+  });
+}
 
 // Error Middleware
 app.use(notFound);
