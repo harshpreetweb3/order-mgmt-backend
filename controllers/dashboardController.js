@@ -1,0 +1,127 @@
+const User = require('../models/User');
+const Order = require('../models/Order');
+
+// @desc    Get dashboard metrics & counters scoped by role
+// @route   GET /api/dashboard/stats
+// @access  Private
+const getDashboardStats = async (req, res) => {
+  const role = req.user.role;
+  const userId = req.user._id;
+
+  if (role === 'Salesman') {
+    const totalOrders = await Order.countDocuments({ createdBy: userId });
+    const pendingOrders = await Order.countDocuments({ createdBy: userId, status: 'Pending' });
+    const deliveredOrders = await Order.countDocuments({ createdBy: userId, status: 'Delivered' });
+
+    const recentOrders = await Order.find({ createdBy: userId })
+      .populate('orderTo', 'name email')
+      .sort({ createdAt: -1 })
+      .limit(5);
+
+    return res.json({
+      role,
+      totalOrders,
+      pendingOrders,
+      deliveredOrders,
+      recentOrders,
+    });
+  }
+
+  if (role === 'Distributor') {
+    // Orders received from Salesmen
+    const ordersReceivedCount = await Order.countDocuments({ orderTo: userId });
+    // Orders created by Distributor sent to Super Stockist
+    const ordersSentCount = await Order.countDocuments({ createdBy: userId });
+
+    const pendingCount = await Order.countDocuments({
+      $or: [{ orderTo: userId }, { createdBy: userId }],
+      status: 'Pending',
+    });
+
+    const deliveredCount = await Order.countDocuments({
+      $or: [{ orderTo: userId }, { createdBy: userId }],
+      status: 'Delivered',
+    });
+
+    const salesmenCount = await User.countDocuments({ role: 'Salesman', distributorId: userId });
+
+    const recentReceivedOrders = await Order.find({ orderTo: userId })
+      .populate('createdBy', 'name email')
+      .sort({ createdAt: -1 })
+      .limit(5);
+
+    const recentSentOrders = await Order.find({ createdBy: userId })
+      .populate('orderTo', 'name email')
+      .sort({ createdAt: -1 })
+      .limit(5);
+
+    return res.json({
+      role,
+      ordersReceivedCount,
+      ordersSentCount,
+      pendingCount,
+      deliveredCount,
+      salesmenCount,
+      recentReceivedOrders,
+      recentSentOrders,
+    });
+  }
+
+  if (role === 'Super Stockist') {
+    const ordersReceivedCount = await Order.countDocuments({ orderTo: userId });
+    const pendingCount = await Order.countDocuments({ orderTo: userId, status: 'Pending' });
+    const deliveredCount = await Order.countDocuments({ orderTo: userId, status: 'Delivered' });
+
+    const recentOrders = await Order.find({ orderTo: userId })
+      .populate('createdBy', 'name email')
+      .sort({ createdAt: -1 })
+      .limit(5);
+
+    return res.json({
+      role,
+      ordersReceivedCount,
+      pendingCount,
+      deliveredCount,
+      recentOrders,
+    });
+  }
+
+  if (role === 'Admin') {
+    const totalSalesmen = await User.countDocuments({ role: 'Salesman' });
+    const totalDistributors = await User.countDocuments({ role: 'Distributor' });
+    const totalSuperStockists = await User.countDocuments({ role: 'Super Stockist' });
+    
+    const totalOrders = await Order.countDocuments();
+    const pendingOrders = await Order.countDocuments({ status: 'Pending' });
+    const deliveredOrders = await Order.countDocuments({ status: 'Delivered' });
+
+    const recentOrders = await Order.find()
+      .populate('createdBy', 'name email role')
+      .populate('orderTo', 'name email role')
+      .sort({ createdAt: -1 })
+      .limit(6);
+
+    const recentUsers = await User.find()
+      .select('-password')
+      .sort({ createdAt: -1 })
+      .limit(5);
+
+    return res.json({
+      role,
+      totalSalesmen,
+      totalDistributors,
+      totalSuperStockists,
+      totalOrders,
+      pendingOrders,
+      deliveredOrders,
+      recentOrders,
+      recentUsers,
+    });
+  }
+
+  res.status(400).json({ message: 'Invalid user role' });
+};
+
+module.exports = {
+  getDashboardStats,
+};

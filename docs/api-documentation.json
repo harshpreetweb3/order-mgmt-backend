@@ -1,0 +1,95 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "PWA Order Management System REST API",
+    "version": "1.0.0",
+    "description": "Production-ready API for Role-Based PWA Order Management system with 4 user tiers: Admin, Super Stockist, Distributor, Salesman."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5000/api",
+      "description": "Local Development Server"
+    }
+  ],
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "summary": "User Login",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": { "type": "string", "example": "sales@ordermanager.com" },
+                  "password": { "type": "string", "example": "sales123" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Returns JWT token and user profile object" }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "summary": "Get Current Authenticated Profile",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Current user data" } }
+      }
+    },
+    "/items": {
+      "get": {
+        "summary": "List Product Master Items",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Array of active/all product items" } }
+      },
+      "post": {
+        "summary": "Create Product Item (Admin only)",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "201": { "description": "Item created" } }
+      }
+    },
+    "/users": {
+      "get": {
+        "summary": "List Users (Filtered by role permissions)",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "List of users" } }
+      },
+      "post": {
+        "summary": "Create User Account (Admin / Distributor)",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "201": { "description": "User created" } }
+      }
+    },
+    "/orders": {
+      "get": {
+        "summary": "Get Scoped Orders (with Search & Filters)",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Filtered array of orders" } }
+      },
+      "post": {
+        "summary": "Create New Order (Salesman / Distributor)",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "201": { "description": "Order created with auto order number & line totals" } }
+      }
+    },
+    "/orders/{id}/delivery": {
+      "put": {
+        "summary": "Update Order Delivery Status (Delivered / Pending)",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Order status updated" } }
+      }
+    },
+    "/dashboard/stats": {
+      "get": {
+        "summary": "Get Role Dashboard Metrics",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Role-specific counters and recent activity" } }
+      }
+    }
+  }
+}
