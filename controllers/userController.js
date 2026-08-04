@@ -64,9 +64,14 @@ const getUsers = async (req, res) => {
 
   // Scope listing based on current user role
   if (req.user.role === 'Distributor') {
-    // Distributor sees their assigned salesmen
-    filter.role = 'Salesman';
-    filter.distributorId = req.user._id;
+    if (role === 'Super Stockist') {
+      // Distributor can fetch Super Stockists list to select Order To when creating an order
+      filter.role = 'Super Stockist';
+    } else {
+      // Default: Distributor sees only their assigned Salesmen
+      filter.role = 'Salesman';
+      filter.distributorId = req.user._id;
+    }
   } else if (req.user.role === 'Super Stockist') {
     // Super Stockist sees Distributors assigned to them
     filter.role = 'Distributor';

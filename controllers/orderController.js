@@ -24,8 +24,12 @@ const generateOrderNumber = async () => {
 const createOrder = async (req, res) => {
   const { orderTo, orderFrom, products } = req.body;
 
-  if (!orderTo || !orderFrom || !products || !Array.isArray(products) || products.length === 0) {
-    return res.status(400).json({ message: 'Order recipient, shop name (Order From), and at least one item are required' });
+  // For Distributors, orderFrom is auto-set to their own name (they order for themselves)
+  const effectiveOrderFrom =
+    req.user.role === 'Distributor' ? req.user.name : orderFrom;
+
+  if (!orderTo || !effectiveOrderFrom || !products || !Array.isArray(products) || products.length === 0) {
+    return res.status(400).json({ message: 'Order recipient and at least one item are required' });
   }
 
   // Verify recipient target user
@@ -88,7 +92,7 @@ const createOrder = async (req, res) => {
     createdBy: req.user._id,
     createdByRole: req.user.role,
     orderTo,
-    orderFrom,
+    orderFrom: effectiveOrderFrom,
     salesman: salesmanId,
     distributor: distributorId,
     superStockist: superStockistId,
