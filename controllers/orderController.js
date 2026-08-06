@@ -20,13 +20,15 @@ const generateOrderNumber = async () => {
 
 // @desc    Create new order
 // @route   POST /api/orders
-// @access  Private (Salesman, Distributor)
+// @access  Private (Salesman, Distributor, Super Stockist, Admin)
 const createOrder = async (req, res) => {
   const { orderTo, orderFrom, products } = req.body;
 
-  // For Distributors, orderFrom is auto-set to their own name (they order for themselves)
+  // For Distributors and Super Stockists, orderFrom is auto-set to their own name
   const effectiveOrderFrom =
-    req.user.role === 'Distributor' ? req.user.name : orderFrom;
+    (req.user.role === 'Distributor' || req.user.role === 'Super Stockist')
+      ? req.user.name
+      : orderFrom;
 
   if (!orderTo || !effectiveOrderFrom || !products || !Array.isArray(products) || products.length === 0) {
     return res.status(400).json({ message: 'Order recipient and at least one item are required' });
@@ -48,6 +50,8 @@ const createOrder = async (req, res) => {
   } else if (req.user.role === 'Distributor') {
     distributorId = req.user._id;
     superStockistId = orderTo; // Order To is Super Stockist
+  } else if (req.user.role === 'Super Stockist') {
+    superStockistId = req.user._id; // Super Stockist is creator
   } else if (req.user.role === 'Admin') {
     // Admin creating custom order
     if (recipientUser.role === 'Distributor') {
@@ -137,7 +141,19 @@ const getOrders = async (req, res) => {
       ];
     }
   } else if (req.user.role === 'Super Stockist') {
-    filter.orderTo = req.user._id;
+    if (scope === 'received') {
+      // Orders received from Distributors
+      filter.orderTo = req.user._id;
+    } else if (scope === 'sent') {
+      // Orders created by Super Stockist sent to Admin
+      filter.createdBy = req.user._id;
+    } else {
+      filter.$or = [
+        { orderTo: req.user._id },
+        { createdBy: req.user._id },
+        { superStockist: req.user._id }
+      ];
+    }
   }
   // Admin sees all without default filter restriction
 
@@ -280,6 +296,14 @@ const updateDeliveryStatus = async (req, res) => {
 
   if (req.user.role === 'Salesman') {
     return res.status(403).json({ message: 'Salesman cannot mark orders as delivered' });
+  }
+
+  // Non-Admin users can only mark delivered if they are the designated recipient (orderTo)
+  if (req.user.role !== 'Admin') {
+    const isRecipient = String(order.orderTo) === String(req.user._id);
+    if (!isRecipient) {
+      return res.status(403).json({ message: 'Only the designated recipient or Admin can update delivery status for this order.' });
+    }
   }
 
   const targetStatus = status || (order.status === 'Pending' ? 'Delivered' : 'Pending');

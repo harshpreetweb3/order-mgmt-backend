@@ -2,18 +2,18 @@ const User = require('../models/User');
 
 // @desc    Create new user
 // @route   POST /api/users
-// @access  Private (Admin, Distributor)
+// @access  Private (Admin)
 const createUser = async (req, res) => {
   const { name, email, password, role, distributorId, superStockistId } = req.body;
+
+  // Authorization check - only Admin can create users
+  if (req.user.role !== 'Admin') {
+    return res.status(403).json({ message: 'Only Admin can create user accounts' });
+  }
 
   // Validation
   if (!name || !email || !password || !role) {
     return res.status(400).json({ message: 'Name, email, password, and role are required' });
-  }
-
-  // Authorization check for non-admin
-  if (req.user.role === 'Distributor' && role !== 'Salesman') {
-    return res.status(403).json({ message: 'Distributors can only create Salesman accounts' });
   }
 
   const userExists = await User.findOne({ email });
@@ -22,21 +22,13 @@ const createUser = async (req, res) => {
     return res.status(400).json({ message: 'User with this email already exists' });
   }
 
-  let finalDistributorId = distributorId;
-  let finalSuperStockistId = superStockistId;
-
-  // If created by Distributor, automatically attach distributorId
-  if (req.user.role === 'Distributor') {
-    finalDistributorId = req.user._id;
-  }
-
   const user = await User.create({
     name,
     email,
     password,
     role,
-    distributorId: finalDistributorId || null,
-    superStockistId: finalSuperStockistId || null,
+    distributorId: distributorId || null,
+    superStockistId: superStockistId || null,
     status: 'Active',
   });
 
@@ -73,9 +65,14 @@ const getUsers = async (req, res) => {
       filter.distributorId = req.user._id;
     }
   } else if (req.user.role === 'Super Stockist') {
-    // Super Stockist sees Distributors assigned to them
-    filter.role = 'Distributor';
-    filter.superStockistId = req.user._id;
+    if (role === 'Admin') {
+      // Super Stockist can fetch Admin list to select Order To when creating an order
+      filter.role = 'Admin';
+    } else {
+      // Default: Super Stockist sees Distributors assigned to them
+      filter.role = 'Distributor';
+      filter.superStockistId = req.user._id;
+    }
   } else if (req.user.role === 'Salesman') {
     // Salesman sees Distributors (to select Order To)
     filter.role = 'Distributor';
