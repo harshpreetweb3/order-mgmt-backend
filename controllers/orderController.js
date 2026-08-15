@@ -3,6 +3,18 @@ const Item = require('../models/Item');
 const User = require('../models/User');
 const Counter = require('../models/Counter');
 
+// Helper to calculate tier price based on role
+const calculateRolePrice = (basePrice, role) => {
+  const price = Number(basePrice) || 0;
+  if (role === 'Salesman') {
+    return Math.round(price * 1.08 * 1.08 * 100) / 100;
+  } else if (role === 'Distributor') {
+    return Math.round(price * 1.08 * 100) / 100;
+  } else {
+    return Math.round(price * 100) / 100;
+  }
+};
+
 // Helper to generate sequential order number
 const generateOrderNumber = async () => {
   const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -61,7 +73,7 @@ const createOrder = async (req, res) => {
     }
   }
 
-  // Calculate product line totals using LATEST Item Master price
+  // Calculate product line totals using 8% tier pricing factor based on creator role
   const populatedProducts = [];
   let grandTotal = 0;
 
@@ -76,8 +88,8 @@ const createOrder = async (req, res) => {
     }
 
     const quantity = Number(itemInput.quantity) || 1;
-    const price = dbItem.price; // Always use master item price
-    const total = quantity * price;
+    const price = calculateRolePrice(dbItem.price, req.user.role);
+    const total = Math.round(quantity * price * 100) / 100;
     grandTotal += total;
 
     populatedProducts.push({
@@ -253,8 +265,8 @@ const updateOrder = async (req, res) => {
       }
 
       const quantity = Number(itemInput.quantity) || 1;
-      const price = dbItem.price; // latest price from Item Master
-      const total = quantity * price;
+      const price = calculateRolePrice(dbItem.price, order.createdByRole || req.user.role);
+      const total = Math.round(quantity * price * 100) / 100;
       grandTotal += total;
 
       populatedProducts.push({
@@ -267,7 +279,7 @@ const updateOrder = async (req, res) => {
     }
 
     order.products = populatedProducts;
-    order.grandTotal = grandTotal;
+    order.grandTotal = Math.round(grandTotal * 100) / 100;
   }
 
   const updatedOrder = await order.save();
@@ -292,7 +304,7 @@ const updateDeliveryStatus = async (req, res) => {
     return res.status(404).json({ message: 'Order not found' });
   }
 
-  const { status } = req.body; // 'Delivered' or 'Pending'
+  const { status, products } = req.body; // 'Delivered' or 'Pending', optional updated products list
 
   if (req.user.role === 'Salesman') {
     return res.status(403).json({ message: 'Salesman cannot mark orders as delivered' });
@@ -304,6 +316,39 @@ const updateDeliveryStatus = async (req, res) => {
     if (!isRecipient) {
       return res.status(403).json({ message: 'Only the designated recipient or Admin can update delivery status for this order.' });
     }
+  }
+
+  // If order receiver modified product quantities or removed unavailable products before delivery
+  if (products && Array.isArray(products)) {
+    if (products.length === 0) {
+      return res.status(400).json({ message: 'Cannot set order to delivered with 0 products.' });
+    }
+
+    const updatedProducts = [];
+    let updatedGrandTotal = 0;
+
+    for (const itemInput of products) {
+      const existingProd = order.products.find(
+        (p) => String(p.itemId) === String(itemInput.itemId)
+      );
+
+      const quantity = Math.max(1, Number(itemInput.quantity) || 1);
+      // Use existing unit price stored on order or itemMaster calculated rate
+      const price = existingProd ? existingProd.price : (Number(itemInput.price) || 0);
+      const total = Math.round(quantity * price * 100) / 100;
+      updatedGrandTotal += total;
+
+      updatedProducts.push({
+        itemId: itemInput.itemId,
+        itemName: existingProd ? existingProd.itemName : itemInput.itemName,
+        quantity,
+        price,
+        total,
+      });
+    }
+
+    order.products = updatedProducts;
+    order.grandTotal = Math.round(updatedGrandTotal * 100) / 100;
   }
 
   const targetStatus = status || (order.status === 'Pending' ? 'Delivered' : 'Pending');
