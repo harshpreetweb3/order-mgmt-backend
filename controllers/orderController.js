@@ -8,7 +8,7 @@ const calculateRolePrice = (basePrice, role) => {
   const price = Number(basePrice) || 0;
   if (role === 'Salesman') {
     return Math.round(price * 1.08 * 1.08 * 100) / 100;
-  } else if (role === 'Distributor') {
+  } else if (role === 'Distributor' || role === 'ASM') {
     return Math.round(price * 1.08 * 100) / 100;
   } else {
     return Math.round(price * 100) / 100;
@@ -32,14 +32,14 @@ const generateOrderNumber = async () => {
 
 // @desc    Create new order
 // @route   POST /api/orders
-// @access  Private (Salesman, Distributor, Super Stockist, Admin)
+// @access  Private (Salesman, Distributor, Super Stockist, Admin, ASM, ASE)
 const createOrder = async (req, res) => {
   const { orderTo, orderFrom, products } = req.body;
 
-  // For Distributors and Super Stockists, orderFrom is auto-set to their own name
+  // For Distributors, Super Stockists, ASM, ASE auto-set orderFrom if not provided
   const effectiveOrderFrom =
-    (req.user.role === 'Distributor' || req.user.role === 'Super Stockist')
-      ? req.user.name
+    (req.user.role === 'Distributor' || req.user.role === 'Super Stockist' || req.user.role === 'ASM' || req.user.role === 'ASE')
+      ? (orderFrom || req.user.name)
       : orderFrom;
 
   if (!orderTo || !effectiveOrderFrom || !products || !Array.isArray(products) || products.length === 0) {
@@ -61,7 +61,12 @@ const createOrder = async (req, res) => {
     distributorId = orderTo; // Order To is Distributor
   } else if (req.user.role === 'Distributor') {
     distributorId = req.user._id;
-    superStockistId = orderTo; // Order To is Super Stockist
+    superStockistId = recipientUser.role === 'Super Stockist' ? orderTo : null;
+  } else if (req.user.role === 'ASM') {
+    distributorId = req.user.distributorId || null;
+    superStockistId = recipientUser.role === 'Super Stockist' ? orderTo : null;
+  } else if (req.user.role === 'ASE') {
+    superStockistId = req.user.superStockistId || null;
   } else if (req.user.role === 'Super Stockist') {
     superStockistId = req.user._id; // Super Stockist is creator
   } else if (req.user.role === 'Admin') {
@@ -142,7 +147,7 @@ const getOrders = async (req, res) => {
       // Orders received from Salesmen
       filter.orderTo = req.user._id;
     } else if (scope === 'sent') {
-      // Orders created by Distributor sent to Super Stockist
+      // Orders created by Distributor sent to Super Stockist or Company
       filter.createdBy = req.user._id;
     } else {
       // All relevant to distributor
@@ -166,6 +171,16 @@ const getOrders = async (req, res) => {
         { superStockist: req.user._id }
       ];
     }
+  } else if (req.user.role === 'ASM') {
+    filter.$or = [
+      { createdBy: req.user._id },
+      { distributor: req.user.distributorId }
+    ];
+  } else if (req.user.role === 'ASE') {
+    filter.$or = [
+      { createdBy: req.user._id },
+      { superStockist: req.user.superStockistId }
+    ];
   }
   // Admin sees all without default filter restriction
 

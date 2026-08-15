@@ -13,13 +13,13 @@ const { protect, authorize } = require('../middleware/authMiddleware');
 router.use(protect);
 
 router.route('/')
-  .post(authorize('Salesman', 'Distributor', 'Super Stockist', 'Admin'), createOrder)
+  .post(authorize('Salesman', 'Distributor', 'Super Stockist', 'Admin', 'ASM', 'ASE'), createOrder)
   .get(getOrders);
 
 router.route('/:id')
   .get(getOrderById)
-  .put(authorize('Salesman', 'Distributor', 'Super Stockist', 'Admin'), updateOrder)
-  .delete(authorize('Salesman', 'Distributor', 'Super Stockist', 'Admin'), deleteOrder);
+  .put(authorize('Salesman', 'Distributor', 'Super Stockist', 'Admin', 'ASM', 'ASE'), updateOrder)
+  .delete(authorize('Salesman', 'Distributor', 'Super Stockist', 'Admin', 'ASM', 'ASE'), deleteOrder);
 
 router.put('/:id/delivery', authorize('Distributor', 'Super Stockist', 'Admin'), updateDeliveryStatus);
 

@@ -56,9 +56,8 @@ const getUsers = async (req, res) => {
 
   // Scope listing based on current user role
   if (req.user.role === 'Distributor') {
-    if (role === 'Super Stockist') {
-      // Distributor can fetch Super Stockists list to select Order To when creating an order
-      filter.role = 'Super Stockist';
+    if (role === 'Super Stockist' || role === 'Admin') {
+      filter.role = role;
     } else {
       // Default: Distributor sees only their assigned Salesmen
       filter.role = 'Salesman';
@@ -66,7 +65,6 @@ const getUsers = async (req, res) => {
     }
   } else if (req.user.role === 'Super Stockist') {
     if (role === 'Admin') {
-      // Super Stockist can fetch Admin list to select Order To when creating an order
       filter.role = 'Admin';
     } else {
       // Default: Super Stockist sees Distributors assigned to them
@@ -76,6 +74,18 @@ const getUsers = async (req, res) => {
   } else if (req.user.role === 'Salesman') {
     // Salesman sees Distributors (to select Order To)
     filter.role = 'Distributor';
+  } else if (req.user.role === 'ASM') {
+    if (role === 'Super Stockist') {
+      filter.role = 'Super Stockist';
+    } else {
+      filter.distributorId = req.user.distributorId;
+    }
+  } else if (req.user.role === 'ASE') {
+    if (role === 'Admin') {
+      filter.role = 'Admin';
+    } else {
+      filter.superStockistId = req.user.superStockistId;
+    }
   }
 
   const users = await User.find(filter)

@@ -23,7 +23,7 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['Admin', 'Super Stockist', 'Distributor', 'Salesman'],
+      enum: ['Admin', 'Super Stockist', 'Distributor', 'Salesman', 'ASM', 'ASE'],
       required: [true, 'Role is required'],
     },
     distributorId: {
