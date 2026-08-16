@@ -172,15 +172,17 @@ const getOrders = async (req, res) => {
       ];
     }
   } else if (req.user.role === 'ASM') {
-    filter.$or = [
-      { createdBy: req.user._id },
-      { distributor: req.user.distributorId }
-    ];
+    const asmConds = [{ createdBy: req.user._id }];
+    if (req.user.distributorId) {
+      asmConds.push({ distributor: req.user.distributorId });
+    }
+    filter.$or = asmConds;
   } else if (req.user.role === 'ASE') {
-    filter.$or = [
-      { createdBy: req.user._id },
-      { superStockist: req.user.superStockistId }
-    ];
+    const aseConds = [{ createdBy: req.user._id }];
+    if (req.user.superStockistId) {
+      aseConds.push({ superStockist: req.user.superStockistId });
+    }
+    filter.$or = aseConds;
   }
   // Admin sees all without default filter restriction
 
@@ -260,9 +262,17 @@ const updateOrder = async (req, res) => {
     return res.status(400).json({ message: 'Delivered orders are read-only and cannot be modified.' });
   }
 
-  // Check permissions: Salesman can edit only own orders
-  if (req.user.role === 'Salesman' && String(order.createdBy) !== String(req.user._id)) {
-    return res.status(403).json({ message: 'You can only edit your own orders.' });
+  // Check permissions: Non-Admin can edit only their own created orders or orders for their entity
+  if (req.user.role !== 'Admin') {
+    const isCreator = String(order.createdBy) === String(req.user._id);
+    const isASMForDistributor = req.user.role === 'ASM' && String(order.distributor) === String(req.user.distributorId);
+    const isASEForSS = req.user.role === 'ASE' && String(order.superStockist) === String(req.user.superStockistId);
+    const isDistributorOwner = req.user.role === 'Distributor' && String(order.distributor) === String(req.user._id);
+    const isSSOwner = req.user.role === 'Super Stockist' && String(order.superStockist) === String(req.user._id);
+
+    if (!isCreator && !isASMForDistributor && !isASEForSS && !isDistributorOwner && !isSSOwner) {
+      return res.status(403).json({ message: 'You can only edit orders created by you or for your entity.' });
+    }
   }
 
   const { orderFrom, products } = req.body;
@@ -383,9 +393,9 @@ const updateDeliveryStatus = async (req, res) => {
   res.json(updatedOrder);
 };
 
-// @desc    Delete order (Salesman prior to delivery or Admin)
+// @desc    Delete order
 // @route   DELETE /api/orders/:id
-// @access  Private (Salesman, Admin)
+// @access  Private (Salesman, Distributor, Super Stockist, Admin, ASM, ASE)
 const deleteOrder = async (req, res) => {
   const order = await Order.findById(req.params.id);
 
@@ -393,10 +403,17 @@ const deleteOrder = async (req, res) => {
     return res.status(404).json({ message: 'Order not found' });
   }
 
-  if (req.user.role === 'Salesman') {
-    if (String(order.createdBy) !== String(req.user._id)) {
-      return res.status(403).json({ message: 'You can only delete your own orders.' });
+  if (req.user.role !== 'Admin') {
+    const isCreator = String(order.createdBy) === String(req.user._id);
+    const isASMForDistributor = req.user.role === 'ASM' && String(order.distributor) === String(req.user.distributorId);
+    const isASEForSS = req.user.role === 'ASE' && String(order.superStockist) === String(req.user.superStockistId);
+    const isDistributorOwner = req.user.role === 'Distributor' && String(order.distributor) === String(req.user._id);
+    const isSSOwner = req.user.role === 'Super Stockist' && String(order.superStockist) === String(req.user._id);
+
+    if (!isCreator && !isASMForDistributor && !isASEForSS && !isDistributorOwner && !isSSOwner) {
+      return res.status(403).json({ message: 'You can only delete orders created by you or for your entity.' });
     }
+
     if (order.status === 'Delivered') {
       return res.status(400).json({ message: 'Delivered orders cannot be deleted.' });
     }

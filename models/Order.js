@@ -42,7 +42,7 @@ const orderSchema = new mongoose.Schema(
     createdByRole: {
       type: String,
       required: true,
-      enum: ['Admin', 'Super Stockist', 'Distributor', 'Salesman'],
+      enum: ['Admin', 'Super Stockist', 'Distributor', 'Salesman', 'ASM', 'ASE'],
     },
     orderTo: {
       type: mongoose.Schema.Types.ObjectId,

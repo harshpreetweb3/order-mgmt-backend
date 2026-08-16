@@ -75,15 +75,15 @@ const getUsers = async (req, res) => {
     // Salesman sees Distributors (to select Order To)
     filter.role = 'Distributor';
   } else if (req.user.role === 'ASM') {
-    if (role === 'Super Stockist') {
-      filter.role = 'Super Stockist';
-    } else {
+    if (role === 'Super Stockist' || role === 'Admin') {
+      filter.role = role;
+    } else if (req.user.distributorId) {
       filter.distributorId = req.user.distributorId;
     }
   } else if (req.user.role === 'ASE') {
-    if (role === 'Admin') {
-      filter.role = 'Admin';
-    } else {
+    if (role === 'Admin' || role === 'Super Stockist') {
+      filter.role = role;
+    } else if (req.user.superStockistId) {
       filter.superStockistId = req.user.superStockistId;
     }
   }
