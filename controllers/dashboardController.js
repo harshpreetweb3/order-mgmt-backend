@@ -1,6 +1,16 @@
 const User = require('../models/User');
 const Order = require('../models/Order');
 
+// Helper to populate all order user references
+const populateOrderFields = (query) => {
+  return query
+    .populate('createdBy', 'name email role')
+    .populate('orderTo', 'name email role')
+    .populate('salesman', 'name email')
+    .populate('distributor', 'name email')
+    .populate('superStockist', 'name email');
+};
+
 // @desc    Get dashboard metrics & counters scoped by role
 // @route   GET /api/dashboard/stats
 // @access  Private
@@ -13,10 +23,9 @@ const getDashboardStats = async (req, res) => {
     const pendingOrders = await Order.countDocuments({ createdBy: userId, status: 'Pending' });
     const deliveredOrders = await Order.countDocuments({ createdBy: userId, status: 'Delivered' });
 
-    const recentOrders = await Order.find({ createdBy: userId })
-      .populate('orderTo', 'name email')
-      .sort({ createdAt: -1 })
-      .limit(5);
+    const recentOrders = await populateOrderFields(
+      Order.find({ createdBy: userId }).sort({ createdAt: -1 }).limit(5)
+    );
 
     return res.json({
       role,
@@ -45,15 +54,13 @@ const getDashboardStats = async (req, res) => {
 
     const salesmenCount = await User.countDocuments({ role: 'Salesman', distributorId: userId });
 
-    const recentReceivedOrders = await Order.find({ orderTo: userId })
-      .populate('createdBy', 'name email')
-      .sort({ createdAt: -1 })
-      .limit(5);
+    const recentReceivedOrders = await populateOrderFields(
+      Order.find({ orderTo: userId }).sort({ createdAt: -1 }).limit(5)
+    );
 
-    const recentSentOrders = await Order.find({ createdBy: userId })
-      .populate('orderTo', 'name email')
-      .sort({ createdAt: -1 })
-      .limit(5);
+    const recentSentOrders = await populateOrderFields(
+      Order.find({ createdBy: userId }).sort({ createdAt: -1 }).limit(5)
+    );
 
     return res.json({
       role,
@@ -72,10 +79,9 @@ const getDashboardStats = async (req, res) => {
     const pendingCount = await Order.countDocuments({ orderTo: userId, status: 'Pending' });
     const deliveredCount = await Order.countDocuments({ orderTo: userId, status: 'Delivered' });
 
-    const recentOrders = await Order.find({ orderTo: userId })
-      .populate('createdBy', 'name email')
-      .sort({ createdAt: -1 })
-      .limit(5);
+    const recentOrders = await populateOrderFields(
+      Order.find({ orderTo: userId }).sort({ createdAt: -1 }).limit(5)
+    );
 
     return res.json({
       role,
@@ -95,11 +101,9 @@ const getDashboardStats = async (req, res) => {
     const pendingOrders = await Order.countDocuments({ status: 'Pending' });
     const deliveredOrders = await Order.countDocuments({ status: 'Delivered' });
 
-    const recentOrders = await Order.find()
-      .populate('createdBy', 'name email role')
-      .populate('orderTo', 'name email role')
-      .sort({ createdAt: -1 })
-      .limit(6);
+    const recentOrders = await populateOrderFields(
+      Order.find().sort({ createdAt: -1 }).limit(6)
+    );
 
     const recentUsers = await User.find()
       .select('-password')

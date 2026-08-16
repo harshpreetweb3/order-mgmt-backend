@@ -36,14 +36,8 @@ const generateOrderNumber = async () => {
 const createOrder = async (req, res) => {
   const { orderTo, orderFrom, products } = req.body;
 
-  // For Distributors, Super Stockists, ASM, ASE auto-set orderFrom if not provided
-  const effectiveOrderFrom =
-    (req.user.role === 'Distributor' || req.user.role === 'Super Stockist' || req.user.role === 'ASM' || req.user.role === 'ASE')
-      ? (orderFrom || req.user.name)
-      : orderFrom;
-
-  if (!orderTo || !effectiveOrderFrom || !products || !Array.isArray(products) || products.length === 0) {
-    return res.status(400).json({ message: 'Order recipient and at least one item are required' });
+  if (!orderTo) {
+    return res.status(400).json({ message: 'Order recipient (orderTo) is required' });
   }
 
   // Verify recipient target user
@@ -55,27 +49,46 @@ const createOrder = async (req, res) => {
   let salesmanId = null;
   let distributorId = null;
   let superStockistId = null;
+  let resolvedEntityName = (orderFrom && orderFrom.trim()) ? orderFrom.trim() : '';
 
   if (req.user.role === 'Salesman') {
     salesmanId = req.user._id;
-    distributorId = orderTo; // Order To is Distributor
+    distributorId = orderTo;
   } else if (req.user.role === 'Distributor') {
     distributorId = req.user._id;
     superStockistId = recipientUser.role === 'Super Stockist' ? orderTo : null;
+    if (!resolvedEntityName) resolvedEntityName = req.user.name;
   } else if (req.user.role === 'ASM') {
     distributorId = req.user.distributorId || null;
     superStockistId = recipientUser.role === 'Super Stockist' ? orderTo : null;
+    if (distributorId) {
+      const distUser = await User.findById(distributorId);
+      if (distUser) resolvedEntityName = distUser.name;
+    }
+    if (!resolvedEntityName) resolvedEntityName = req.user.name;
   } else if (req.user.role === 'ASE') {
     superStockistId = req.user.superStockistId || null;
+    if (superStockistId) {
+      const ssUser = await User.findById(superStockistId);
+      if (ssUser) resolvedEntityName = ssUser.name;
+    }
+    if (!resolvedEntityName) resolvedEntityName = req.user.name;
   } else if (req.user.role === 'Super Stockist') {
-    superStockistId = req.user._id; // Super Stockist is creator
+    superStockistId = req.user._id;
+    if (!resolvedEntityName) resolvedEntityName = req.user.name;
   } else if (req.user.role === 'Admin') {
-    // Admin creating custom order
     if (recipientUser.role === 'Distributor') {
       distributorId = recipientUser._id;
     } else if (recipientUser.role === 'Super Stockist') {
       superStockistId = recipientUser._id;
     }
+    if (!resolvedEntityName) resolvedEntityName = 'RGDG Agro India';
+  }
+
+  const effectiveOrderFrom = resolvedEntityName || orderFrom || req.user.name;
+
+  if (!effectiveOrderFrom || !products || !Array.isArray(products) || products.length === 0) {
+    return res.status(400).json({ message: 'Order recipient and at least one item are required' });
   }
 
   // Calculate product line totals using 8% tier pricing factor based on creator role
