@@ -36,6 +36,12 @@ const userSchema = new mongoose.Schema(
       ref: 'User',
       default: null,
     },
+    assignedBrands: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Brand',
+      },
+    ],
     status: {
       type: String,
       enum: ['Active', 'Inactive'],

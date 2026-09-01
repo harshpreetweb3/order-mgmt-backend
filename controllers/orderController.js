@@ -1,6 +1,7 @@
 const Order = require('../models/Order');
 const Item = require('../models/Item');
 const User = require('../models/User');
+const Shop = require('../models/Shop');
 const Counter = require('../models/Counter');
 
 // Helper to calculate tier price based on role
@@ -34,7 +35,7 @@ const generateOrderNumber = async () => {
 // @route   POST /api/orders
 // @access  Private (Salesman, Distributor, Super Stockist, Admin, ASM, ASE)
 const createOrder = async (req, res) => {
-  const { orderTo, orderFrom, products } = req.body;
+  const { orderTo, orderFrom, shopId, products } = req.body;
 
   if (!orderTo) {
     return res.status(400).json({ message: 'Order recipient (orderTo) is required' });
@@ -50,6 +51,13 @@ const createOrder = async (req, res) => {
   let distributorId = null;
   let superStockistId = null;
   let resolvedEntityName = (orderFrom && orderFrom.trim()) ? orderFrom.trim() : '';
+
+  if (shopId) {
+    const shop = await Shop.findById(shopId);
+    if (shop) {
+      resolvedEntityName = shop.name;
+    }
+  }
 
   if (req.user.role === 'Salesman') {
     salesmanId = req.user._id;
@@ -127,6 +135,7 @@ const createOrder = async (req, res) => {
     createdByRole: req.user.role,
     orderTo,
     orderFrom: effectiveOrderFrom,
+    shopId: shopId || null,
     salesman: salesmanId,
     distributor: distributorId,
     superStockist: superStockistId,
@@ -140,7 +149,8 @@ const createOrder = async (req, res) => {
     .populate('orderTo', 'name email role')
     .populate('salesman', 'name email')
     .populate('distributor', 'name email')
-    .populate('superStockist', 'name email');
+    .populate('superStockist', 'name email')
+    .populate('shopId', 'name ownerName phone address');
 
   res.status(201).json(fullOrder);
 };
@@ -223,6 +233,7 @@ const getOrders = async (req, res) => {
     .populate('salesman', 'name email')
     .populate('distributor', 'name email')
     .populate('superStockist', 'name email')
+    .populate('shopId', 'name ownerName phone address')
     .sort({ createdAt: -1 });
 
   let orders = await query;

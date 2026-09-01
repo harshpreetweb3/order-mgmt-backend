@@ -18,6 +18,11 @@ const itemSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    brandId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Brand',
+      default: null,
+    },
     active: {
       type: Boolean,
       default: true,

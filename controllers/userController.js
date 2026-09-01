@@ -4,7 +4,7 @@ const User = require('../models/User');
 // @route   POST /api/users
 // @access  Private (Admin)
 const createUser = async (req, res) => {
-  const { name, email, password, role, distributorId, superStockistId } = req.body;
+  const { name, email, password, role, distributorId, superStockistId, assignedBrands } = req.body;
 
   // Authorization check - only Admin can create users
   if (req.user.role !== 'Admin') {
@@ -29,18 +29,17 @@ const createUser = async (req, res) => {
     role,
     distributorId: distributorId || null,
     superStockistId: superStockistId || null,
+    assignedBrands: Array.isArray(assignedBrands) ? assignedBrands : [],
     status: 'Active',
   });
 
-  res.status(201).json({
-    _id: user._id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    status: user.status,
-    distributorId: user.distributorId,
-    superStockistId: user.superStockistId,
-  });
+  const fullUser = await User.findById(user._id)
+    .populate('distributorId', 'name email')
+    .populate('superStockistId', 'name email')
+    .populate('assignedBrands', 'name')
+    .select('-password');
+
+  res.status(201).json(fullUser);
 };
 
 // @desc    Get users list
@@ -91,6 +90,7 @@ const getUsers = async (req, res) => {
   const users = await User.find(filter)
     .populate('distributorId', 'name email')
     .populate('superStockistId', 'name email')
+    .populate('assignedBrands', 'name')
     .select('-password')
     .sort({ createdAt: -1 });
 
@@ -107,7 +107,7 @@ const updateUser = async (req, res) => {
     return res.status(404).json({ message: 'User not found' });
   }
 
-  const { name, email, role, status, distributorId, superStockistId, password } = req.body;
+  const { name, email, role, status, distributorId, superStockistId, assignedBrands, password } = req.body;
 
   if (name) user.name = name;
   if (email) user.email = email;
@@ -115,19 +115,18 @@ const updateUser = async (req, res) => {
   if (status) user.status = status;
   if (distributorId !== undefined) user.distributorId = distributorId;
   if (superStockistId !== undefined) user.superStockistId = superStockistId;
+  if (assignedBrands !== undefined) user.assignedBrands = Array.isArray(assignedBrands) ? assignedBrands : [];
   if (password) user.password = password; // pre('save') will hash if modified
 
-  const updatedUser = await user.save();
+  await user.save();
 
-  res.json({
-    _id: updatedUser._id,
-    name: updatedUser.name,
-    email: updatedUser.email,
-    role: updatedUser.role,
-    status: updatedUser.status,
-    distributorId: updatedUser.distributorId,
-    superStockistId: updatedUser.superStockistId,
-  });
+  const updatedUser = await User.findById(user._id)
+    .populate('distributorId', 'name email')
+    .populate('superStockistId', 'name email')
+    .populate('assignedBrands', 'name')
+    .select('-password');
+
+  res.json(updatedUser);
 };
 
 // @desc    Delete user

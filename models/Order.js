@@ -54,6 +54,11 @@ const orderSchema = new mongoose.Schema(
       required: [true, 'Shop name (Order From) is required'],
       trim: true,
     },
+    shopId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Shop',
+      default: null,
+    },
     salesman: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
