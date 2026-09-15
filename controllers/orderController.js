@@ -90,7 +90,7 @@ const createOrder = async (req, res) => {
     } else if (recipientUser.role === 'Super Stockist') {
       superStockistId = recipientUser._id;
     }
-    if (!resolvedEntityName) resolvedEntityName = 'RGDG Agro India';
+    if (!resolvedEntityName) resolvedEntityName = 'KNK Enterprises';
   }
 
   const effectiveOrderFrom = resolvedEntityName || orderFrom || req.user.name;
