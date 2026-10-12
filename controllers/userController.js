@@ -4,27 +4,55 @@ const User = require('../models/User');
 // @route   POST /api/users
 // @access  Private (Admin)
 const createUser = async (req, res) => {
-  const { name, email, password, role, distributorId, superStockistId, assignedBrands } = req.body;
+  const { name, email, username, phone, password, role, distributorId, superStockistId, assignedBrands } = req.body;
 
   // Authorization check - only Admin can create users
   if (req.user.role !== 'Admin') {
     return res.status(403).json({ message: 'Only Admin can create user accounts' });
   }
 
+  // The single username field provided by frontend
+  const userInput = (username || email || '').trim();
+
   // Validation
-  if (!name || !email || !password || !role) {
-    return res.status(400).json({ message: 'Name, email, password, and role are required' });
+  if (!name || !userInput || !password || !role) {
+    return res.status(400).json({ message: 'Name, username, password, and role are required' });
   }
 
-  const userExists = await User.findOne({ email });
+  let resolvedEmail = email && email.includes('@') ? email.trim().toLowerCase() : undefined;
+  let resolvedUsername = userInput.toLowerCase();
+  let resolvedPhone = phone ? phone.trim() : '';
 
-  if (userExists) {
-    return res.status(400).json({ message: 'User with this email already exists' });
+  // If userInput contains @, it can serve as email and username
+  if (userInput.includes('@')) {
+    resolvedEmail = userInput.toLowerCase();
+    resolvedUsername = userInput.toLowerCase();
+  } else if (/^\+?[0-9\s\-]+$/.test(userInput)) {
+    // Numeric phone number
+    if (!resolvedPhone) {
+      resolvedPhone = userInput.replace(/\D/g, '');
+    }
+  }
+
+  if (resolvedEmail) {
+    const emailExists = await User.findOne({ email: resolvedEmail });
+    if (emailExists) {
+      return res.status(400).json({ message: 'User with this email already exists' });
+    }
+  }
+
+  if (resolvedUsername) {
+    const usernameExists = await User.findOne({ username: resolvedUsername });
+    if (usernameExists) {
+      return res.status(400).json({ message: 'User with this username already exists' });
+    }
   }
 
   const user = await User.create({
-    name,
-    email,
+    name: name.trim(),
+    ...(resolvedEmail ? { email: resolvedEmail } : {}),
+    username: resolvedUsername,
+    phone: resolvedPhone,
     password,
     role,
     distributorId: distributorId || null,
@@ -34,8 +62,8 @@ const createUser = async (req, res) => {
   });
 
   const fullUser = await User.findById(user._id)
-    .populate('distributorId', 'name email')
-    .populate('superStockistId', 'name email')
+    .populate('distributorId', 'name email username phone')
+    .populate('superStockistId', 'name email username phone')
     .populate('assignedBrands', 'name')
     .select('-password');
 
@@ -88,8 +116,8 @@ const getUsers = async (req, res) => {
   }
 
   const users = await User.find(filter)
-    .populate('distributorId', 'name email')
-    .populate('superStockistId', 'name email')
+    .populate('distributorId', 'name email username phone')
+    .populate('superStockistId', 'name email username phone')
     .populate('assignedBrands', 'name')
     .select('-password')
     .sort({ createdAt: -1 });
@@ -107,10 +135,10 @@ const updateUser = async (req, res) => {
     return res.status(404).json({ message: 'User not found' });
   }
 
-  const { name, email, role, status, distributorId, superStockistId, assignedBrands, password } = req.body;
+  const { name, email, username, phone, role, status, distributorId, superStockistId, assignedBrands, password } = req.body;
 
-  if (name) user.name = name;
-  if (email) user.email = email;
+  if (name) user.name = name.trim();
+  if (email) user.email = email.trim().toLowerCase();
   if (role) user.role = role;
   if (status) user.status = status;
   if (distributorId !== undefined) user.distributorId = distributorId;
@@ -118,11 +146,46 @@ const updateUser = async (req, res) => {
   if (assignedBrands !== undefined) user.assignedBrands = Array.isArray(assignedBrands) ? assignedBrands : [];
   if (password) user.password = password; // pre('save') will hash if modified
 
+  if (username !== undefined) {
+    const trimmedInput = username && username.trim() ? username.trim().toLowerCase() : null;
+    if (trimmedInput) {
+      if (trimmedInput.includes('@')) {
+        const emailExists = await User.findOne({
+          email: trimmedInput,
+          _id: { $ne: user._id },
+        });
+        if (emailExists) {
+          return res.status(400).json({ message: 'User with this email already exists' });
+        }
+        user.email = trimmedInput;
+        user.username = trimmedInput;
+      } else {
+        const usernameExists = await User.findOne({
+          username: trimmedInput,
+          _id: { $ne: user._id },
+        });
+        if (usernameExists) {
+          return res.status(400).json({ message: 'User with this username already exists' });
+        }
+        user.username = trimmedInput;
+        if (!user.phone && /^\+?[0-9\s\-]+$/.test(trimmedInput)) {
+          user.phone = trimmedInput.replace(/\D/g, '');
+        }
+      }
+    } else {
+      user.username = undefined;
+    }
+  }
+
+  if (phone !== undefined) {
+    user.phone = phone ? phone.trim() : '';
+  }
+
   await user.save();
 
   const updatedUser = await User.findById(user._id)
-    .populate('distributorId', 'name email')
-    .populate('superStockistId', 'name email')
+    .populate('distributorId', 'name email username phone')
+    .populate('superStockistId', 'name email username phone')
     .populate('assignedBrands', 'name')
     .select('-password');
 

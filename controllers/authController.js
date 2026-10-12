@@ -12,17 +12,37 @@ const generateToken = (id) => {
   );
 };
 
-// @desc    Auth user & get token
+// @desc    Auth user & get token (supports Email, Username, or Phone Number)
 // @route   POST /api/auth/login
 // @access  Public
 const loginUser = async (req, res) => {
-  const { email, password } = req.body;
+  const { email, username, identifier, password } = req.body;
+  const loginInput = (identifier || username || email || '').trim();
 
-  if (!email || !password) {
-    return res.status(400).json({ message: 'Please provide email and password' });
+  if (!loginInput || !password) {
+    return res.status(400).json({ message: 'Please provide username, email, or phone number and password' });
   }
 
-  const user = await User.findOne({ email }).select('+password');
+  const loginLower = loginInput.toLowerCase();
+  const digitsOnly = loginInput.replace(/\D/g, '');
+
+  const searchConditions = [
+    { email: loginLower },
+    { username: loginLower },
+  ];
+
+  // If user entered a phone number or string with digits
+  if (digitsOnly && digitsOnly.length >= 7) {
+    searchConditions.push({ username: digitsOnly });
+    searchConditions.push({ phone: digitsOnly });
+    searchConditions.push({ phone: loginInput });
+    if (digitsOnly.length === 10) {
+      searchConditions.push({ username: `+91${digitsOnly}` });
+      searchConditions.push({ phone: `+91${digitsOnly}` });
+    }
+  }
+
+  const user = await User.findOne({ $or: searchConditions }).select('+password');
 
   if (!user) {
     return res.status(401).json({ message: 'Invalid credentials' });
@@ -39,13 +59,15 @@ const loginUser = async (req, res) => {
   }
 
   // Populate references if applicable
-  await user.populate('distributorId', 'name email');
-  await user.populate('superStockistId', 'name email');
+  await user.populate('distributorId', 'name email username phone');
+  await user.populate('superStockistId', 'name email username phone');
 
   res.json({
     _id: user._id,
     name: user.name,
     email: user.email,
+    username: user.username || '',
+    phone: user.phone || '',
     role: user.role,
     status: user.status,
     distributorId: user.distributorId,
@@ -59,8 +81,8 @@ const loginUser = async (req, res) => {
 // @access  Private
 const getMe = async (req, res) => {
   const user = await User.findById(req.user._id)
-    .populate('distributorId', 'name email')
-    .populate('superStockistId', 'name email');
+    .populate('distributorId', 'name email username phone')
+    .populate('superStockistId', 'name email username phone');
 
   res.json(user);
 };

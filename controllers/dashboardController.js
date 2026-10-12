@@ -8,7 +8,8 @@ const populateOrderFields = (query) => {
     .populate('orderTo', 'name email role')
     .populate('salesman', 'name email')
     .populate('distributor', 'name email')
-    .populate('superStockist', 'name email');
+    .populate('superStockist', 'name email')
+    .populate('cancelledBy', 'name email role');
 };
 
 // @desc    Get dashboard metrics & counters scoped by role
@@ -22,6 +23,7 @@ const getDashboardStats = async (req, res) => {
     const totalOrders = await Order.countDocuments({ createdBy: userId });
     const pendingOrders = await Order.countDocuments({ createdBy: userId, status: 'Pending' });
     const deliveredOrders = await Order.countDocuments({ createdBy: userId, status: 'Delivered' });
+    const cancelledOrders = await Order.countDocuments({ createdBy: userId, status: 'Cancelled' });
 
     const recentOrders = await populateOrderFields(
       Order.find({ createdBy: userId }).sort({ createdAt: -1 }).limit(5)
@@ -32,6 +34,7 @@ const getDashboardStats = async (req, res) => {
       totalOrders,
       pendingOrders,
       deliveredOrders,
+      cancelledOrders,
       recentOrders,
     });
   }
@@ -52,6 +55,11 @@ const getDashboardStats = async (req, res) => {
       status: 'Delivered',
     });
 
+    const cancelledCount = await Order.countDocuments({
+      $or: [{ orderTo: userId }, { createdBy: userId }],
+      status: 'Cancelled',
+    });
+
     const salesmenCount = await User.countDocuments({ role: 'Salesman', distributorId: userId });
 
     const recentReceivedOrders = await populateOrderFields(
@@ -68,6 +76,7 @@ const getDashboardStats = async (req, res) => {
       ordersSentCount,
       pendingCount,
       deliveredCount,
+      cancelledCount,
       salesmenCount,
       recentReceivedOrders,
       recentSentOrders,
@@ -78,6 +87,7 @@ const getDashboardStats = async (req, res) => {
     const ordersReceivedCount = await Order.countDocuments({ orderTo: userId });
     const pendingCount = await Order.countDocuments({ orderTo: userId, status: 'Pending' });
     const deliveredCount = await Order.countDocuments({ orderTo: userId, status: 'Delivered' });
+    const cancelledCount = await Order.countDocuments({ orderTo: userId, status: 'Cancelled' });
 
     const recentOrders = await populateOrderFields(
       Order.find({ orderTo: userId }).sort({ createdAt: -1 }).limit(5)
@@ -88,6 +98,7 @@ const getDashboardStats = async (req, res) => {
       ordersReceivedCount,
       pendingCount,
       deliveredCount,
+      cancelledCount,
       recentOrders,
     });
   }
@@ -100,6 +111,7 @@ const getDashboardStats = async (req, res) => {
     const totalOrders = await Order.countDocuments();
     const pendingOrders = await Order.countDocuments({ status: 'Pending' });
     const deliveredOrders = await Order.countDocuments({ status: 'Delivered' });
+    const cancelledOrders = await Order.countDocuments({ status: 'Cancelled' });
 
     const recentOrders = await populateOrderFields(
       Order.find().sort({ createdAt: -1 }).limit(6)
@@ -118,6 +130,7 @@ const getDashboardStats = async (req, res) => {
       totalOrders,
       pendingOrders,
       deliveredOrders,
+      cancelledOrders,
       recentOrders,
       recentUsers,
     });

@@ -23,6 +23,8 @@
                 "type": "object",
                 "properties": {
                   "email": { "type": "string", "example": "sales@ordermanager.com" },
+                  "username": { "type": "string", "example": "salesman or 9666666666" },
+                  "identifier": { "type": "string", "example": "salesman" },
                   "password": { "type": "string", "example": "sales123" }
                 }
               }

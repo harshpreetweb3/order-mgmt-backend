@@ -9,9 +9,43 @@ dotenv.config();
 
 const seedData = async () => {
   try {
+    // Ensure email index is sparse in MongoDB
+    try {
+      const col = mongoose.connection.collection('users');
+      const idxs = await col.indexes();
+      const emailIdx = idxs.find((i) => i.name === 'email_1');
+      if (emailIdx && !emailIdx.sparse) {
+        await col.dropIndex('email_1');
+        await col.createIndex({ email: 1 }, { unique: true, sparse: true });
+        console.log('🔄 Updated email_1 index to sparse: true');
+      }
+    } catch (idxErr) {
+      // ignore if collection is new or empty
+    }
+
     const userCount = await User.countDocuments();
     if (userCount > 0) {
-      console.log('🌱 Database already contains data. Skipping seed.');
+      // Backfill usernames for existing users if missing
+      const usersWithoutUsername = await User.find({
+        $or: [{ username: { $exists: false } }, { username: null }, { username: '' }],
+      });
+      if (usersWithoutUsername.length > 0) {
+        console.log(`🔄 Backfilling username for ${usersWithoutUsername.length} existing user(s)...`);
+        for (const u of usersWithoutUsername) {
+          let base = u.email ? u.email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '') : u.role.toLowerCase().replace(/\s+/g, '');
+          if (!base) base = 'user';
+          let candidate = base;
+          let counter = 1;
+          while (await User.findOne({ username: candidate, _id: { $ne: u._id } })) {
+            candidate = `${base}${counter++}`;
+          }
+          u.username = candidate;
+          if (!u.phone) u.phone = '';
+          await u.save();
+          console.log(`   Assigned username '${candidate}' to ${u.email} (${u.name})`);
+        }
+      }
+      console.log('🌱 Database already contains data. Seed check completed.');
       return;
     }
 
@@ -21,6 +55,8 @@ const seedData = async () => {
     const superStockist = await User.create({
       name: 'Apex Logistics SS',
       email: 'ss@ordermanager.com',
+      username: 'superstockist',
+      phone: '9888888888',
       password: 'ss1234',
       role: 'Super Stockist',
       status: 'Active',
@@ -30,6 +66,8 @@ const seedData = async () => {
     const admin = await User.create({
       name: 'System Admin',
       email: 'admin@ordermanager.com',
+      username: 'admin',
+      phone: '9999999999',
       password: 'admin123',
       role: 'Admin',
       status: 'Active',
@@ -39,6 +77,8 @@ const seedData = async () => {
     const distributor = await User.create({
       name: 'Metro Trade Distributors',
       email: 'dist@ordermanager.com',
+      username: 'distributor',
+      phone: '9777777777',
       password: 'dist123',
       role: 'Distributor',
       superStockistId: superStockist._id,
@@ -49,6 +89,8 @@ const seedData = async () => {
     const salesman = await User.create({
       name: 'John Salesman',
       email: 'sales@ordermanager.com',
+      username: 'salesman',
+      phone: '9666666666',
       password: 'sales123',
       role: 'Salesman',
       distributorId: distributor._id,

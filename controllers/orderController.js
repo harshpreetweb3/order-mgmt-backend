@@ -52,14 +52,15 @@ const createOrder = async (req, res) => {
   let superStockistId = null;
   let resolvedEntityName = (orderFrom && orderFrom.trim()) ? orderFrom.trim() : '';
 
-  if (shopId) {
-    const shop = await Shop.findById(shopId);
-    if (shop) {
-      resolvedEntityName = shop.name;
-    }
-  }
-
   if (req.user.role === 'Salesman') {
+    if (!shopId) {
+      return res.status(400).json({ message: 'A registered retail shop is required to create an order as Salesman' });
+    }
+    const shop = await Shop.findById(shopId);
+    if (!shop) {
+      return res.status(404).json({ message: 'Selected retail shop was not found' });
+    }
+    resolvedEntityName = shop.name;
     salesmanId = req.user._id;
     distributorId = orderTo;
   } else if (req.user.role === 'Distributor') {
@@ -234,6 +235,7 @@ const getOrders = async (req, res) => {
     .populate('distributor', 'name email')
     .populate('superStockist', 'name email')
     .populate('shopId', 'name ownerName phone address')
+    .populate('cancelledBy', 'name email role')
     .sort({ createdAt: -1 });
 
   let orders = await query;
@@ -262,7 +264,9 @@ const getOrderById = async (req, res) => {
     .populate('orderTo', 'name email role')
     .populate('salesman', 'name email')
     .populate('distributor', 'name email')
-    .populate('superStockist', 'name email');
+    .populate('superStockist', 'name email')
+    .populate('shopId', 'name ownerName phone address')
+    .populate('cancelledBy', 'name email role');
 
   if (!order) {
     return res.status(404).json({ message: 'Order not found' });
@@ -281,9 +285,13 @@ const updateOrder = async (req, res) => {
     return res.status(404).json({ message: 'Order not found' });
   }
 
-  // Check if delivered
+  // Check if delivered or cancelled
   if (order.status === 'Delivered' && req.user.role !== 'Admin') {
     return res.status(400).json({ message: 'Delivered orders are read-only and cannot be modified.' });
+  }
+
+  if (order.status === 'Cancelled') {
+    return res.status(400).json({ message: 'Cancelled orders are read-only and cannot be modified.' });
   }
 
   // Check permissions: Non-Admin can edit only their own created orders or orders for their entity
@@ -299,9 +307,15 @@ const updateOrder = async (req, res) => {
     }
   }
 
-  const { orderFrom, products } = req.body;
+  const { orderFrom, shopId, products } = req.body;
 
-  if (orderFrom) order.orderFrom = orderFrom;
+  if (shopId) {
+    order.shopId = shopId;
+    const shop = await Shop.findById(shopId);
+    if (shop) order.orderFrom = shop.name;
+  } else if (orderFrom) {
+    order.orderFrom = orderFrom;
+  }
 
   if (products && Array.isArray(products) && products.length > 0) {
     const populatedProducts = [];
@@ -338,7 +352,9 @@ const updateOrder = async (req, res) => {
     .populate('orderTo', 'name email role')
     .populate('salesman', 'name email')
     .populate('distributor', 'name email')
-    .populate('superStockist', 'name email');
+    .populate('superStockist', 'name email')
+    .populate('shopId', 'name ownerName phone address')
+    .populate('cancelledBy', 'name email role');
 
   res.json(fullOrder);
 };
@@ -351,6 +367,10 @@ const updateDeliveryStatus = async (req, res) => {
 
   if (!order) {
     return res.status(404).json({ message: 'Order not found' });
+  }
+
+  if (order.status === 'Cancelled') {
+    return res.status(400).json({ message: 'Cancelled orders cannot be marked as delivered.' });
   }
 
   const { status, products } = req.body; // 'Delivered' or 'Pending', optional updated products list
@@ -412,7 +432,9 @@ const updateDeliveryStatus = async (req, res) => {
     .populate('orderTo', 'name email role')
     .populate('salesman', 'name email')
     .populate('distributor', 'name email')
-    .populate('superStockist', 'name email');
+    .populate('superStockist', 'name email')
+    .populate('shopId', 'name ownerName phone address')
+    .populate('cancelledBy', 'name email role');
 
   res.json(updatedOrder);
 };
@@ -447,6 +469,73 @@ const deleteOrder = async (req, res) => {
   res.json({ message: 'Order deleted successfully' });
 };
 
+// @desc    Cancel order (Order creator or Admin)
+// @route   PUT /api/orders/:id/cancel
+// @access  Private (Salesman, Distributor, Super Stockist, Admin, ASM, ASE)
+const cancelOrder = async (req, res) => {
+  const order = await Order.findById(req.params.id);
+
+  if (!order) {
+    return res.status(404).json({ message: 'Order not found' });
+  }
+
+  if (order.status === 'Cancelled') {
+    return res.status(400).json({ message: 'Order is already cancelled' });
+  }
+
+  if (order.status === 'Delivered') {
+    return res.status(400).json({ message: 'Delivered orders cannot be cancelled' });
+  }
+
+  const isAdmin = req.user.role === 'Admin';
+  const isCreator = String(order.createdBy) === String(req.user._id);
+
+  if (!isAdmin && !isCreator) {
+    return res.status(403).json({ message: 'Only the order creator or an Admin can cancel this order.' });
+  }
+
+  const { reason } = req.body;
+
+  order.status = 'Cancelled';
+  order.cancelledAt = new Date();
+  order.cancelledBy = req.user._id;
+  order.cancelledByRole = req.user.role;
+  if (reason && typeof reason === 'string' && reason.trim()) {
+    order.cancellationReason = reason.trim();
+  }
+
+  await order.save();
+
+  const fullOrder = await Order.findById(order._id)
+    .populate('createdBy', 'name email role')
+    .populate('orderTo', 'name email role')
+    .populate('salesman', 'name email')
+    .populate('distributor', 'name email')
+    .populate('superStockist', 'name email')
+    .populate('shopId', 'name ownerName phone address')
+    .populate('cancelledBy', 'name email role');
+
+  res.json(fullOrder);
+};
+
+// @desc    Factory reset - Delete all orders in the system (Admin only)
+// @route   DELETE /api/orders/factory-reset
+// @access  Private (Admin only)
+const factoryResetOrders = async (req, res) => {
+  if (req.user.role !== 'Admin') {
+    return res.status(403).json({ message: 'Access denied. Only Admins can perform factory reset.' });
+  }
+
+  const orderCount = await Order.countDocuments();
+  await Order.deleteMany({});
+  await Counter.deleteMany({ id: { $regex: '^ORDER_' } });
+
+  res.json({
+    message: `Factory reset successful. All ${orderCount} orders have been deleted.`,
+    deletedCount: orderCount,
+  });
+};
+
 module.exports = {
   createOrder,
   getOrders,
@@ -454,4 +543,6 @@ module.exports = {
   updateOrder,
   updateDeliveryStatus,
   deleteOrder,
+  cancelOrder,
+  factoryResetOrders,
 };

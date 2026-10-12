@@ -90,11 +90,28 @@ const orderSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['Pending', 'Delivered'],
+      enum: ['Pending', 'Delivered', 'Cancelled'],
       default: 'Pending',
     },
     deliveredAt: {
       type: Date,
+      default: null,
+    },
+    cancelledAt: {
+      type: Date,
+      default: null,
+    },
+    cancelledBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    cancelledByRole: {
+      type: String,
+      default: null,
+    },
+    cancellationReason: {
+      type: String,
       default: null,
     },
   },
