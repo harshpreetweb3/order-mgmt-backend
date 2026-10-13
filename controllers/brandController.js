@@ -29,7 +29,7 @@ const getBrandById = async (req, res) => {
 // @route   POST /api/brands
 // @access  Private (Admin)
 const createBrand = async (req, res) => {
-  const { name, description, active } = req.body;
+  const { name, description, active, allowSalesmanPriceEdit } = req.body;
 
   if (!name || !name.trim()) {
     return res.status(400).json({ message: 'Brand name is required' });
@@ -44,6 +44,7 @@ const createBrand = async (req, res) => {
     name: name.trim(),
     description: description ? description.trim() : '',
     active: active !== undefined ? active : true,
+    allowSalesmanPriceEdit: allowSalesmanPriceEdit !== undefined ? Boolean(allowSalesmanPriceEdit) : false,
   });
 
   res.status(201).json(brand);
@@ -58,7 +59,7 @@ const updateBrand = async (req, res) => {
     return res.status(404).json({ message: 'Brand not found' });
   }
 
-  const { name, description, active } = req.body;
+  const { name, description, active, allowSalesmanPriceEdit } = req.body;
 
   if (name && name.trim() !== brand.name) {
     const existing = await Brand.findOne({ name: name.trim() });
@@ -70,6 +71,7 @@ const updateBrand = async (req, res) => {
 
   if (description !== undefined) brand.description = description.trim();
   if (active !== undefined) brand.active = active;
+  if (allowSalesmanPriceEdit !== undefined) brand.allowSalesmanPriceEdit = Boolean(allowSalesmanPriceEdit);
 
   const updatedBrand = await brand.save();
   res.json(updatedBrand);

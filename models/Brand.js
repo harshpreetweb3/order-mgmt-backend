@@ -17,6 +17,10 @@ const brandSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    allowSalesmanPriceEdit: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

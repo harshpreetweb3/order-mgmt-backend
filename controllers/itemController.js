@@ -59,7 +59,7 @@ const getItems = async (req, res) => {
   }
 
   const items = await Item.find(filter)
-    .populate('brandId', 'name active')
+    .populate('brandId', 'name active allowSalesmanPriceEdit')
     .sort({ itemName: 1 });
 
   res.json(items);
@@ -69,7 +69,7 @@ const getItems = async (req, res) => {
 // @route   GET /api/items/:id
 // @access  Private
 const getItemById = async (req, res) => {
-  const item = await Item.findById(req.params.id).populate('brandId', 'name active');
+  const item = await Item.findById(req.params.id).populate('brandId', 'name active allowSalesmanPriceEdit');
   if (!item) {
     return res.status(404).json({ message: 'Item not found' });
   }

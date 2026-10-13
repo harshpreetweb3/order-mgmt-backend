@@ -105,7 +105,7 @@ const createOrder = async (req, res) => {
   let grandTotal = 0;
 
   for (const itemInput of products) {
-    const dbItem = await Item.findById(itemInput.itemId);
+    const dbItem = await Item.findById(itemInput.itemId).populate('brandId');
     if (!dbItem) {
       return res.status(404).json({ message: `Item with ID ${itemInput.itemId} not found` });
     }
@@ -115,7 +115,17 @@ const createOrder = async (req, res) => {
     }
 
     const quantity = Number(itemInput.quantity) || 1;
-    const price = calculateRolePrice(dbItem.price, req.user.role);
+    let price = calculateRolePrice(dbItem.price, req.user.role);
+
+    // If salesman role and brand allows salesman price edit, allow custom price
+    const brandAllowsPriceEdit = Boolean(dbItem.brandId && dbItem.brandId.allowSalesmanPriceEdit);
+    if (req.user.role === 'Salesman' && brandAllowsPriceEdit && itemInput.price !== undefined && itemInput.price !== null && itemInput.price !== '') {
+      const customPrice = Number(itemInput.price);
+      if (!isNaN(customPrice) && customPrice >= 0) {
+        price = Math.round(customPrice * 100) / 100;
+      }
+    }
+
     const total = Math.round(quantity * price * 100) / 100;
     grandTotal += total;
 
@@ -322,13 +332,29 @@ const updateOrder = async (req, res) => {
     let grandTotal = 0;
 
     for (const itemInput of products) {
-      const dbItem = await Item.findById(itemInput.itemId);
+      const dbItem = await Item.findById(itemInput.itemId).populate('brandId');
       if (!dbItem) {
         return res.status(404).json({ message: `Item with ID ${itemInput.itemId} not found` });
       }
 
       const quantity = Number(itemInput.quantity) || 1;
-      const price = calculateRolePrice(dbItem.price, order.createdByRole || req.user.role);
+      const roleForPricing = order.createdByRole || req.user.role;
+      let price = calculateRolePrice(dbItem.price, roleForPricing);
+
+      const brandAllowsPriceEdit = Boolean(dbItem.brandId && dbItem.brandId.allowSalesmanPriceEdit);
+      const isSalesmanOrder = req.user.role === 'Salesman' || order.createdByRole === 'Salesman';
+      if (isSalesmanOrder && brandAllowsPriceEdit && itemInput.price !== undefined && itemInput.price !== null && itemInput.price !== '') {
+        const customPrice = Number(itemInput.price);
+        if (!isNaN(customPrice) && customPrice >= 0) {
+          price = Math.round(customPrice * 100) / 100;
+        }
+      } else if (req.user.role === 'Admin' && itemInput.price !== undefined && itemInput.price !== null && itemInput.price !== '') {
+        const customPrice = Number(itemInput.price);
+        if (!isNaN(customPrice) && customPrice >= 0) {
+          price = Math.round(customPrice * 100) / 100;
+        }
+      }
+
       const total = Math.round(quantity * price * 100) / 100;
       grandTotal += total;
 
